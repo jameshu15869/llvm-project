@@ -10,6 +10,7 @@
 #include "llvm/ExecutionEngine/JITLink/EHFrameSupport.h"
 #include "llvm/ExecutionEngine/JITLink/JITLinkMemoryManager.h"
 #include "llvm/ExecutionEngine/Orc/COFFPlatform.h"
+#include "llvm/ExecutionEngine/Orc/Core.h"
 #include "llvm/ExecutionEngine/Orc/DebugObjectManagerPlugin.h"
 #include "llvm/ExecutionEngine/Orc/DebuggerSupportPlugin.h"
 #include "llvm/ExecutionEngine/Orc/ELFNixPlatform.h"
@@ -288,19 +289,40 @@ public:
   }
 
   Error initialize(JITDylib &JD) override {
+    // LLVM_DEBUG({
+    //   dbgs() << "GenericLLVMIRPlatformSupport getting initializers to run\n";
+    // });
+    // if (auto Initializers = getInitializers(JD)) {
+    //   LLVM_DEBUG(
+    //       { dbgs() << "GenericLLVMIRPlatformSupport running initializers\n"; });
+    //   for (auto InitFnAddr : *Initializers) {
+    //     LLVM_DEBUG({
+    //       dbgs() << "  Running init " << formatv("{0:x16}", InitFnAddr)
+    //              << "...\n";
+    //     });
+    //     auto *InitFn = InitFnAddr.toPtr<void (*)()>();
+    //     InitFn();
+    //   }
+    // } else
+    //   return Initializers.takeError();
+    // return Error::success();
     LLVM_DEBUG({
-      dbgs() << "GenericLLVMIRPlatformSupport getting initializers to run\n";
+      dbgs() << "GenericLLVMIRPlatformSupport getting oop initializers to run\n";
     });
     if (auto Initializers = getInitializers(JD)) {
+      auto &ES = getExecutionSession();
       LLVM_DEBUG(
-          { dbgs() << "GenericLLVMIRPlatformSupport running initializers\n"; });
+          { dbgs() << "GenericLLVMIRPlatformSupport running oop initializers\n"; });
       for (auto InitFnAddr : *Initializers) {
         LLVM_DEBUG({
           dbgs() << "  Running init " << formatv("{0:x16}", InitFnAddr)
                  << "...\n";
         });
-        auto *InitFn = InitFnAddr.toPtr<void (*)()>();
-        InitFn();
+        // auto *InitFn = InitFnAddr.toPtr<void (*)()>();
+        if (auto Err = ES.getExecutorProcessControl().runAsMain(InitFnAddr, ArrayRef<std::string>()).takeError()) {
+          return Err;
+        }
+        // InitFn();
       }
     } else
       return Initializers.takeError();
@@ -320,8 +342,12 @@ public:
           dbgs() << "  Running deinit " << formatv("{0:x16}", DeinitFnAddr)
                  << "...\n";
         });
-        auto *DeinitFn = DeinitFnAddr.toPtr<void (*)()>();
-        DeinitFn();
+        // auto *DeinitFn = DeinitFnAddr.toPtr<void (*)()>();
+        auto &ES = getExecutionSession();
+        if (auto Err = ES.getExecutorProcessControl().runAsVoidFunction(DeinitFnAddr).takeError()) {
+          return Err;
+        }
+        // DeinitFn();
       }
     } else
       return Deinitializers.takeError();

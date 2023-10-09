@@ -112,6 +112,7 @@ Error SimpleRemoteEPC::disconnect() {
   D->shutdown();
   std::unique_lock<std::mutex> Lock(SimpleRemoteEPCMutex);
   DisconnectCV.wait(Lock, [this] { return Disconnected; });
+  Lock.unlock();
   return std::move(DisconnectErr);
 }
 
@@ -189,9 +190,11 @@ void SimpleRemoteEPC::handleDisconnect(Error Err) {
     KV.second(
         shared::WrapperFunctionResult::createOutOfBandError("disconnecting"));
 
-  std::lock_guard<std::mutex> Lock(SimpleRemoteEPCMutex);
-  DisconnectErr = joinErrors(std::move(DisconnectErr), std::move(Err));
-  Disconnected = true;
+  {
+    std::lock_guard<std::mutex> Lock(SimpleRemoteEPCMutex);
+    DisconnectErr = joinErrors(std::move(DisconnectErr), std::move(Err));
+    Disconnected = true;
+  }
   DisconnectCV.notify_all();
 }
 

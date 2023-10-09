@@ -18,6 +18,8 @@
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
+#include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
+#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
@@ -57,6 +59,35 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
   }
 }
 
+IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
+                                         llvm::Error &Err,
+                                         const clang::TargetInfo &TI, std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC)
+    : TSCtx(TSC) {
+  using namespace llvm::orc;
+  llvm::ErrorAsOutParameter EAO(&Err);
+
+  auto JTMB = JITTargetMachineBuilder(TI.getTriple());
+  JTMB.addFeatures(TI.getTargetOpts().Features);
+  LLJITBuilder Builder;
+  Builder.setJITTargetMachineBuilder(JTMB);
+  // Enable debugging of JIT'd code (only works on JITLink for ELF and MachO).
+  Builder.setEnableDebuggerSupport(true);
+
+  Builder.setExecutorProcessControl(std::move(EPC));
+
+  if (auto JitOrErr = Builder.create()) {
+    Jit = std::move(*JitOrErr);
+    if (auto DylibSearchGeneratorOrErr = llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(Jit->getExecutionSession())) {
+      Jit->getMainJITDylib().addGenerator(std::move(*DylibSearchGeneratorOrErr));
+    } else {
+      Err = DylibSearchGeneratorOrErr.takeError();
+    }
+  } else {
+    Err = JitOrErr.takeError();
+    return;
+  }
+}
+
 IncrementalExecutor::~IncrementalExecutor() {}
 
 llvm::Error IncrementalExecutor::addModule(PartialTranslationUnit &PTU) {
@@ -82,7 +113,13 @@ llvm::Error IncrementalExecutor::removeModule(PartialTranslationUnit &PTU) {
 // Clean up the JIT instance.
 llvm::Error IncrementalExecutor::cleanUp() {
   // This calls the global dtors of registered modules.
-  return Jit->deinitialize(Jit->getMainJITDylib());
+  if (auto Err = Jit->deinitialize(Jit->getMainJITDylib())) {
+    llvm::report_fatal_error(
+          llvm::Twine("Failed to call dtors of registered modules: ") +
+          toString(std::move(Err)));
+    return Err;
+  }
+  return Jit->getExecutionSession().endSession();
 }
 
 llvm::Error IncrementalExecutor::runCtors() const {

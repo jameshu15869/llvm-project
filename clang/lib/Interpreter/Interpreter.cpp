@@ -236,12 +236,17 @@ Interpreter::Interpreter(std::unique_ptr<CompilerInstance> CI,
 }
 
 Interpreter::~Interpreter() {
-  if (IncrExecutor) {
-    if (llvm::Error Err = IncrExecutor->cleanUp())
-      llvm::report_fatal_error(
-          llvm::Twine("Failed to clean up IncrementalExecutor: ") +
-          toString(std::move(Err)));
-  }
+  // if (auto Err = EPC->disconnect()) {
+  //   llvm::report_fatal_error(
+  //       llvm::Twine("Failed to clean up ExecutorProcessControl: ") +
+  //       toString(std::move(Err)));
+  // }
+  // if (IncrExecutor) {
+  //   if (llvm::Error Err = IncrExecutor->cleanUp())
+  //     llvm::report_fatal_error(
+  //         llvm::Twine("Failed to clean up IncrementalExecutor: ") +
+  //         toString(std::move(Err)));
+  // }
 }
 
 // These better to put in a runtime header but we can't. This is because we
@@ -315,6 +320,16 @@ Interpreter::createWithCUDA(std::unique_ptr<CompilerInstance> CI,
   return Interp;
 }
 
+llvm::Expected<std::unique_ptr<Interpreter>>
+Interpreter::createWithOutOfProcessExecutor(std::unique_ptr<CompilerInstance> CI, std::unique_ptr<llvm::orc::ExecutorProcessControl> EI) {
+  auto Interp = create(std::move(CI));
+  if (auto E = Interp.takeError()) {
+    return std::move(E);
+  }
+  (*Interp)->EPC = std::move(EI);
+  return Interp;
+}
+
 const CompilerInstance *Interpreter::getCompilerInstance() const {
   return IncrParser->getCI();
 }
@@ -363,11 +378,26 @@ llvm::Error Interpreter::CreateExecutor() {
   const clang::TargetInfo &TI =
       getCompilerInstance()->getASTContext().getTargetInfo();
   llvm::Error Err = llvm::Error::success();
-  auto Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI);
+  std::unique_ptr<IncrementalExecutor> Executor;
+  if (EPC) {
+    Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI, std::move(EPC));
+  } else {
+    Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI);
+  }
   if (!Err)
     IncrExecutor = std::move(Executor);
 
   return Err;
+}
+
+llvm::Error Interpreter::EndSession(){
+  if (EPC) {
+    return EPC->disconnect();
+  }
+  // if (IncrExecutor) {
+  //   return IncrExecutor->cleanUp();
+  // }
+  return llvm::Error::success();
 }
 
 llvm::Error Interpreter::Execute(PartialTranslationUnit &T) {

@@ -319,7 +319,7 @@ public:
                  << "...\n";
         });
         // auto *InitFn = InitFnAddr.toPtr<void (*)()>();
-        if (auto Err = ES.getExecutorProcessControl().runAsMain(InitFnAddr, ArrayRef<std::string>()).takeError()) {
+        if (auto Err = ES.getExecutorProcessControl().runAsVoidFunction(InitFnAddr).takeError()) {
           return Err;
         }
         // InitFn();

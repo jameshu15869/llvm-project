@@ -93,20 +93,20 @@ IncrementalExecutor::~IncrementalExecutor() {}
 llvm::Error IncrementalExecutor::addModule(PartialTranslationUnit &PTU) {
   llvm::orc::ResourceTrackerSP RT =
       Jit->getMainJITDylib().createResourceTracker();
-  ResourceTrackers[&PTU] = RT;
+  // ResourceTrackers[&PTU] = RT;
 
   return Jit->addIRModule(RT, {std::move(PTU.TheModule), TSCtx});
 }
 
 llvm::Error IncrementalExecutor::removeModule(PartialTranslationUnit &PTU) {
 
-  llvm::orc::ResourceTrackerSP RT = std::move(ResourceTrackers[&PTU]);
-  if (!RT)
-    return llvm::Error::success();
+  // llvm::orc::ResourceTrackerSP RT = std::move(ResourceTrackers[&PTU]);
+  // if (!RT)
+  //   return llvm::Error::success();
 
-  ResourceTrackers.erase(&PTU);
-  if (llvm::Error Err = RT->remove())
-    return Err;
+  // ResourceTrackers.erase(&PTU);
+  // if (llvm::Error Err = RT->remove())
+  //   return Err;
   return llvm::Error::success();
 }
 

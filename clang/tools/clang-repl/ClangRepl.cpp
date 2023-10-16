@@ -47,6 +47,9 @@ static llvm::cl::list<std::string> OptInputs(llvm::cl::Positional,
                                              llvm::cl::desc("[code to run]"));
 
 static llvm::cl::OptionCategory JITLinkCategory("JITLink Options");
+static llvm::cl::opt<std::string> OutOfProcessExecutor(
+    "oop-executor", llvm::cl::desc("Launch an out-of-process executor to run code"),
+    llvm::cl::ValueOptional, llvm::cl::cat(JITLinkCategory));
 static llvm::cl::opt<std::string> OutOfProcessExecutorConnect(
     "oop-executor-connect",
     llvm::cl::desc("Connect to an out-of-process executor via TCP"),
@@ -150,6 +153,29 @@ ReplListCompleter::operator()(llvm::StringRef Buffer, size_t Pos,
   return Comps;
 }
 
+static llvm::Error sanitizeArguments(const char *ArgV0) {
+  // Only one of -oop-executor and -oop-executor-connect can be used.
+  if (!!OutOfProcessExecutor.getNumOccurrences() &&
+      !!OutOfProcessExecutorConnect.getNumOccurrences())
+    return make_error<llvm::StringError>(
+        "Only one of -" + OutOfProcessExecutor.ArgStr + " and -" +
+            OutOfProcessExecutorConnect.ArgStr + " can be specified",
+        llvm::inconvertibleErrorCode());
+
+  // If -oop-executor was used but no value was specified then use a sensible
+  // default.
+  if (!!OutOfProcessExecutor.getNumOccurrences() &&
+      OutOfProcessExecutor.empty()) {
+    llvm::SmallString<256> OOPExecutorPath(llvm::sys::fs::getMainExecutable(
+        ArgV0, reinterpret_cast<void *>(&sanitizeArguments)));
+    llvm::sys::path::remove_filename(OOPExecutorPath);
+    llvm::sys::path::append(OOPExecutorPath, "llvm-jitlink-executor");
+    OutOfProcessExecutor = OOPExecutorPath.str().str();
+  }
+
+  return llvm::Error::success();
+}
+
 static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launchExecutor() {
   constexpr int ReadEnd = 0;
   constexpr int WriteEnd = 1;
@@ -174,7 +200,6 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launch
     close(ToExecutor[WriteEnd]);
     close(FromExecutor[ReadEnd]);
 
-    std::string OutOfProcessExecutor = "/home/gfx/Documents/llvm-project/build/bin/llvm-jitlink-executor";
     // Execute the child process.
     std::unique_ptr<char[]> ExecutorPath, FDSpecifier;
     {
@@ -326,9 +351,6 @@ int main(int argc, const char **argv) {
     }
     return 0;
   }
-  // int (*printfPtr)(const char*, ...) = &std::printf;
-  // llvm::outs() << "just ptr " << (void*) printfPtr << "\n";
-  // llvm::outs() << "dereferenced " << (void*) (*printfPtr) << "\n";
   clang::IncrementalCompilerBuilder CB;
   CB.SetCompilerArgs(ClangArgv);
 
@@ -364,8 +386,9 @@ int main(int argc, const char **argv) {
   if (CudaEnabled)
     DeviceCI->LoadRequestedPlugins();
 
+  ExitOnErr(sanitizeArguments(argv[0]));
+
   std::unique_ptr<clang::Interpreter> Interp;
-  bool oopEnabled = true;
 
   if (CudaEnabled) {
     Interp = ExitOnErr(
@@ -377,13 +400,14 @@ int main(int argc, const char **argv) {
       auto CudaRuntimeLibPath = CudaPath + "/lib/libcudart.so";
       ExitOnErr(Interp->LoadDynamicLibrary(CudaRuntimeLibPath.c_str()));
     }
+  } else if (OutOfProcessExecutor.getNumOccurrences()) {
+    // Create an instance of llvm-jitlink-executor in a separate process. 
+    auto oopExecutor = ExitOnErr(launchExecutor());
+    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(oopExecutor)));
   } else if (OutOfProcessExecutorConnect.getNumOccurrences()) {
     /// If -oop-executor-connect is passed then connect to the executor.
     auto REPC = ExitOnErr(connectToExecutor());
     Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(REPC)));
-  } else if (oopEnabled) {
-    auto oopExecutor = ExitOnErr(launchExecutor());
-    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(oopExecutor)));
   } else
     Interp = ExitOnErr(clang::Interpreter::create(std::move(CI)));
 
@@ -412,9 +436,10 @@ int main(int argc, const char **argv) {
       if (Input == R"(%quit)") {
         auto EE = Interp->getExecutionEngine();
         if (auto Err = EE.takeError()) {
-          llvm::outs() << "Bad\n";
+          llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(), "error: ");
+        } else {
+          ExitOnErr(EE->getExecutionSession().endSession());
         }
-        ExitOnErr(EE->getExecutionSession().endSession());
 
         break;
       }

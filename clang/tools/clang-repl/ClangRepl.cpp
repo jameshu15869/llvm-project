@@ -157,7 +157,7 @@ static llvm::Error sanitizeArguments(const char *ArgV0) {
   // Only one of -oop-executor and -oop-executor-connect can be used.
   if (!!OutOfProcessExecutor.getNumOccurrences() &&
       !!OutOfProcessExecutorConnect.getNumOccurrences())
-    return make_error<llvm::StringError>(
+    return llvm::make_error<llvm::StringError>(
         "Only one of -" + OutOfProcessExecutor.ArgStr + " and -" +
             OutOfProcessExecutorConnect.ArgStr + " can be specified",
         llvm::inconvertibleErrorCode());
@@ -284,12 +284,12 @@ static llvm::Expected<int> connectTCPSocket(std::string Host, std::string PortSt
 static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> connectToExecutor() {
 #ifndef LLVM_ON_UNIX
   // FIXME: Add TCP support for Windows.
-  return make_error<StringError>("-" + OutOfProcessExecutorConnect.ArgStr +
+  return llvm::make_error<StringError>("-" + OutOfProcessExecutorConnect.ArgStr +
                                      " not supported on non-unix platforms",
                                  inconvertibleErrorCode());
 #elif !LLVM_ENABLE_THREADS
   // Out of process mode using SimpleRemoteEPC depends on threads.
-  return make_error<StringError>(
+  return llvm::make_error<StringError>(
       "-" + OutOfProcessExecutorConnect.ArgStr +
           " requires threads, but LLVM was built with "
           "LLVM_ENABLE_THREADS=Off",

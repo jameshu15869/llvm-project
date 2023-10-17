@@ -30,8 +30,6 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <sstream> //for std::stringstream 
-#include <string>  //for std::string
 
 static llvm::cl::opt<bool> CudaEnabled("cuda", llvm::cl::Hidden);
 static llvm::cl::opt<std::string> CudaPath("cuda-path", llvm::cl::Hidden);
@@ -351,6 +349,7 @@ int main(int argc, const char **argv) {
     }
     return 0;
   }
+  
   clang::IncrementalCompilerBuilder CB;
   CB.SetCompilerArgs(ClangArgv);
 
@@ -401,7 +400,7 @@ int main(int argc, const char **argv) {
       ExitOnErr(Interp->LoadDynamicLibrary(CudaRuntimeLibPath.c_str()));
     }
   } else if (OutOfProcessExecutor.getNumOccurrences()) {
-    // Create an instance of llvm-jitlink-executor in a separate process. 
+    // Create an instance of llvm-jitlink-executor in a separate process.
     auto oopExecutor = ExitOnErr(launchExecutor());
     Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(oopExecutor)));
   } else if (OutOfProcessExecutorConnect.getNumOccurrences()) {

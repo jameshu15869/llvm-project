@@ -434,13 +434,7 @@ int main(int argc, const char **argv) {
 
       Input += L;
       if (Input == R"(%quit)") {
-        auto EE = Interp->getExecutionEngine();
-        if (auto Err = EE.takeError()) {
-          llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(), "error: ");
-        } else {
-          ExitOnErr(EE->getExecutionSession().endSession());
-        }
-
+        ExitOnErr(Interp->EndSession());
         break;
       }
       if (Input == R"(%undo)") {

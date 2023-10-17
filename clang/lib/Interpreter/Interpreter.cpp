@@ -391,13 +391,14 @@ llvm::Error Interpreter::CreateExecutor() {
 }
 
 llvm::Error Interpreter::EndSession(){
-  if (EPC) {
-    return EPC->disconnect();
+  if (IncrExecutor) {
+    return IncrExecutor->removeResourceTrackers();
   }
-  // if (IncrExecutor) {
-  //   return IncrExecutor->cleanUp();
-  // }
-  return llvm::Error::success();
+  auto EE = getExecutionEngine();
+  if (!EE)
+    return EE.takeError();
+
+  return EE->getExecutionSession().endSession();
 }
 
 llvm::Error Interpreter::Execute(PartialTranslationUnit &T) {

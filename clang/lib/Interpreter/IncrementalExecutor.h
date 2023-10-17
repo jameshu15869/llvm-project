@@ -53,7 +53,7 @@ public:
   llvm::Error addModule(PartialTranslationUnit &PTU);
   llvm::Error removeModule(PartialTranslationUnit &PTU);
   llvm::Error runCtors() const;
-  llvm::Error cleanUp();
+  llvm::Error removeResourceTrackers();
   llvm::Expected<llvm::orc::ExecutorAddr>
   getSymbolAddress(llvm::StringRef Name, SymbolNameKind NameKind) const;
 

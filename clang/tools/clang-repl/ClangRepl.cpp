@@ -349,7 +349,7 @@ int main(int argc, const char **argv) {
     }
     return 0;
   }
-  
+
   clang::IncrementalCompilerBuilder CB;
   CB.SetCompilerArgs(ClangArgv);
 

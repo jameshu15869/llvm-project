@@ -149,6 +149,10 @@ private:
 
   bool FindRuntimeInterface();
 
+  // Ensure that we do not try to clean up the Interpreter in ~Interpreter if
+  // ExecutionSession::endSession() was already called.
+  bool isOpen = true;
+
   llvm::DenseMap<CXXRecordDecl *, llvm::orc::ExecutorAddr> Dtors;
 
   llvm::SmallVector<Expr *, 3> ValuePrintingInfo;

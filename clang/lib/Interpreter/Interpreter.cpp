@@ -236,17 +236,14 @@ Interpreter::Interpreter(std::unique_ptr<CompilerInstance> CI,
 }
 
 Interpreter::~Interpreter() {
-  // if (auto Err = EPC->disconnect()) {
-  //   llvm::report_fatal_error(
-  //       llvm::Twine("Failed to clean up ExecutorProcessControl: ") +
-  //       toString(std::move(Err)));
-  // }
-  // if (IncrExecutor) {
-  //   if (llvm::Error Err = IncrExecutor->cleanUp())
-  //     llvm::report_fatal_error(
-  //         llvm::Twine("Failed to clean up IncrementalExecutor: ") +
-  //         toString(std::move(Err)));
-  // }
+  // If we already closed the Interpreter with EndSession(),
+  // the IncrementalExecutor has already been cleaned up.
+  if (IncrExecutor && isOpen) {
+    if (llvm::Error Err = IncrExecutor->cleanUp())
+      llvm::report_fatal_error(
+          llvm::Twine("Failed to clean up IncrementalExecutor: ") +
+          toString(std::move(Err)));
+  }
 }
 
 // These better to put in a runtime header but we can't. This is because we
@@ -391,13 +388,15 @@ llvm::Error Interpreter::CreateExecutor() {
 }
 
 llvm::Error Interpreter::EndSession(){
-  if (IncrExecutor) {
-    return IncrExecutor->removeResourceTrackers();
-  }
+  if (IncrExecutor)
+    if (auto Err = IncrExecutor->removeResourceTrackers())
+      return Err;
+
   auto EE = getExecutionEngine();
   if (!EE)
     return EE.takeError();
-
+  
+  isOpen = false;
   return EE->getExecutionSession().endSession();
 }
 

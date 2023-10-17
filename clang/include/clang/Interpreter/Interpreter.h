@@ -103,8 +103,9 @@ public:
   createWithCUDA(std::unique_ptr<CompilerInstance> CI,
                  std::unique_ptr<CompilerInstance> DCI);
   static llvm::Expected<std::unique_ptr<Interpreter>>
-  createWithOutOfProcessExecutor(std::unique_ptr<CompilerInstance> CI,
-                 std::unique_ptr<llvm::orc::ExecutorProcessControl> EI);
+  createWithOutOfProcessExecutor(
+      std::unique_ptr<CompilerInstance> CI,
+      std::unique_ptr<llvm::orc::ExecutorProcessControl> EI);
   llvm::Error EndSession();
   const ASTContext &getASTContext() const;
   ASTContext &getASTContext();

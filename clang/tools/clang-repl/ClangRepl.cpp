@@ -18,18 +18,18 @@
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
-#include "llvm/ExecutionEngine/Orc/SimpleRemoteEPC.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
+#include "llvm/ExecutionEngine/Orc/SimpleRemoteEPC.h"
 #include "llvm/LineEditor/LineEditor.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ManagedStatic.h" // llvm_shutdown
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/TargetSelect.h"
-#include <optional>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
 #include <netdb.h>
+#include <optional>
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 static llvm::cl::opt<bool> CudaEnabled("cuda", llvm::cl::Hidden);
 static llvm::cl::opt<std::string> CudaPath("cuda-path", llvm::cl::Hidden);
@@ -46,7 +46,8 @@ static llvm::cl::list<std::string> OptInputs(llvm::cl::Positional,
 
 static llvm::cl::OptionCategory JITLinkCategory("JITLink Options");
 static llvm::cl::opt<std::string> OutOfProcessExecutor(
-    "oop-executor", llvm::cl::desc("Launch an out-of-process executor to run code"),
+    "oop-executor",
+    llvm::cl::desc("Launch an out-of-process executor to run code"),
     llvm::cl::ValueOptional, llvm::cl::cat(JITLinkCategory));
 static llvm::cl::opt<std::string> OutOfProcessExecutorConnect(
     "oop-executor-connect",
@@ -174,7 +175,8 @@ static llvm::Error sanitizeArguments(const char *ArgV0) {
   return llvm::Error::success();
 }
 
-static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launchExecutor() {
+static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>>
+launchExecutor() {
   constexpr int ReadEnd = 0;
   constexpr int WriteEnd = 1;
 
@@ -186,8 +188,8 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launch
 
   // Create pipes to/from the executor..
   if (pipe(ToExecutor) != 0 || pipe(FromExecutor) != 0)
-    return llvm::make_error<llvm::StringError>("Unable to create pipe for executor",
-                                   llvm::inconvertibleErrorCode());
+    return llvm::make_error<llvm::StringError>(
+        "Unable to create pipe for executor", llvm::inconvertibleErrorCode());
 
   ChildPID = fork();
 
@@ -216,7 +218,7 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launch
     int RC = execvp(ExecutorPath.get(), Args);
     if (RC != 0) {
       llvm::errs() << "unable to launch out-of-process executor \""
-             << ExecutorPath.get() << "\"\n";
+                   << ExecutorPath.get() << "\"\n";
       exit(1);
     }
   }
@@ -228,9 +230,10 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> launch
 
   auto S = llvm::orc::SimpleRemoteEPC::Setup();
 
-  return llvm::orc::SimpleRemoteEPC::Create<llvm::orc::FDSimpleRemoteEPCTransport>(
-      std::make_unique<llvm::orc::DynamicThreadPoolTaskDispatcher>(), std::move(S),
-      FromExecutor[ReadEnd], ToExecutor[WriteEnd]);
+  return llvm::orc::SimpleRemoteEPC::Create<
+      llvm::orc::FDSimpleRemoteEPCTransport>(
+      std::make_unique<llvm::orc::DynamicThreadPoolTaskDispatcher>(),
+      std::move(S), FromExecutor[ReadEnd], ToExecutor[WriteEnd]);
 }
 
 #if LLVM_ON_UNIX && LLVM_ENABLE_THREADS
@@ -241,7 +244,8 @@ static llvm::Error createTCPSocketError(llvm::Twine Details) {
       llvm::inconvertibleErrorCode());
 }
 
-static llvm::Expected<int> connectTCPSocket(std::string Host, std::string PortStr) {
+static llvm::Expected<int> connectTCPSocket(std::string Host,
+                                            std::string PortStr) {
   addrinfo *AI;
   addrinfo Hints{};
   Hints.ai_family = AF_INET;
@@ -279,12 +283,14 @@ static llvm::Expected<int> connectTCPSocket(std::string Host, std::string PortSt
 }
 #endif
 
-static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> connectToExecutor() {
+static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>>
+connectToExecutor() {
 #ifndef LLVM_ON_UNIX
   // FIXME: Add TCP support for Windows.
-  return llvm::make_error<StringError>("-" + OutOfProcessExecutorConnect.ArgStr +
-                                     " not supported on non-unix platforms",
-                                 inconvertibleErrorCode());
+  return llvm::make_error<StringError>(
+      "-" + OutOfProcessExecutorConnect.ArgStr +
+          " not supported on non-unix platforms",
+      inconvertibleErrorCode());
 #elif !LLVM_ENABLE_THREADS
   // Out of process mode using SimpleRemoteEPC depends on threads.
   return llvm::make_error<StringError>(
@@ -295,7 +301,8 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> connec
 #else
 
   llvm::StringRef Host, PortStr;
-  std::tie(Host, PortStr) = llvm::StringRef(OutOfProcessExecutorConnect).split(':');
+  std::tie(Host, PortStr) =
+      llvm::StringRef(OutOfProcessExecutorConnect).split(':');
   if (Host.empty())
     return createTCPSocketError("Host name for -" +
                                 OutOfProcessExecutorConnect.ArgStr +
@@ -315,7 +322,8 @@ static llvm::Expected<std::unique_ptr<llvm::orc::ExecutorProcessControl>> connec
 
   auto S = llvm::orc::SimpleRemoteEPC::Setup();
 
-  return llvm::orc::SimpleRemoteEPC::Create<llvm::orc::FDSimpleRemoteEPCTransport>(
+  return llvm::orc::SimpleRemoteEPC::Create<
+      llvm::orc::FDSimpleRemoteEPCTransport>(
       std::make_unique<llvm::orc::DynamicThreadPoolTaskDispatcher>(),
       std::move(S), *SockFD, *SockFD);
 #endif
@@ -338,9 +346,7 @@ int main(int argc, const char **argv) {
   llvm::InitializeAllAsmPrinters();
 
   if (OptHostSupportsJit) {
-    auto J = llvm::orc::LLJITBuilder()
-               .setEnableDebuggerSupport(true)
-               .create();
+    auto J = llvm::orc::LLJITBuilder().setEnableDebuggerSupport(true).create();
     if (J)
       llvm::outs() << "true\n";
     else {
@@ -402,11 +408,13 @@ int main(int argc, const char **argv) {
   } else if (OutOfProcessExecutor.getNumOccurrences()) {
     // Create an instance of llvm-jitlink-executor in a separate process.
     auto oopExecutor = ExitOnErr(launchExecutor());
-    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(oopExecutor)));
+    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(
+        std::move(CI), std::move(oopExecutor)));
   } else if (OutOfProcessExecutorConnect.getNumOccurrences()) {
     /// If -oop-executor-connect is passed then connect to the executor.
     auto REPC = ExitOnErr(connectToExecutor());
-    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(std::move(CI), std::move(REPC)));
+    Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(
+        std::move(CI), std::move(REPC)));
   } else
     Interp = ExitOnErr(clang::Interpreter::create(std::move(CI)));
 

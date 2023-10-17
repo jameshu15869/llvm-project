@@ -17,9 +17,9 @@
 #include "clang/Interpreter/PartialTranslationUnit.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
+#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
-#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
@@ -59,9 +59,10 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
   }
 }
 
-IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
-                                         llvm::Error &Err,
-                                         const clang::TargetInfo &TI, std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC)
+IncrementalExecutor::IncrementalExecutor(
+    llvm::orc::ThreadSafeContext &TSC, llvm::Error &Err,
+    const clang::TargetInfo &TI,
+    std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC)
     : TSCtx(TSC) {
   using namespace llvm::orc;
   llvm::ErrorAsOutParameter EAO(&Err);
@@ -77,8 +78,11 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
 
   if (auto JitOrErr = Builder.create()) {
     Jit = std::move(*JitOrErr);
-    if (auto DylibSearchGeneratorOrErr = llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(Jit->getExecutionSession())) {
-      Jit->getMainJITDylib().addGenerator(std::move(*DylibSearchGeneratorOrErr));
+    if (auto DylibSearchGeneratorOrErr =
+            llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
+                Jit->getExecutionSession())) {
+      Jit->getMainJITDylib().addGenerator(
+          std::move(*DylibSearchGeneratorOrErr));
     } else {
       Err = DylibSearchGeneratorOrErr.takeError();
     }
@@ -116,7 +120,7 @@ llvm::Error IncrementalExecutor::cleanUp() {
   return Jit->deinitialize(Jit->getMainJITDylib());
 }
 
-// Clear the map to remove references to the resouce trackers. 
+// Clear the map to remove references to the resouce trackers.
 llvm::Error IncrementalExecutor::removeResourceTrackers() {
   ResourceTrackers.shrink_and_clear();
   return llvm::Error::success();

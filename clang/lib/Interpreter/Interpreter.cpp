@@ -318,7 +318,9 @@ Interpreter::createWithCUDA(std::unique_ptr<CompilerInstance> CI,
 }
 
 llvm::Expected<std::unique_ptr<Interpreter>>
-Interpreter::createWithOutOfProcessExecutor(std::unique_ptr<CompilerInstance> CI, std::unique_ptr<llvm::orc::ExecutorProcessControl> EI) {
+Interpreter::createWithOutOfProcessExecutor(
+    std::unique_ptr<CompilerInstance> CI,
+    std::unique_ptr<llvm::orc::ExecutorProcessControl> EI) {
   auto Interp = create(std::move(CI));
   if (auto E = Interp.takeError()) {
     return std::move(E);
@@ -377,7 +379,8 @@ llvm::Error Interpreter::CreateExecutor() {
   llvm::Error Err = llvm::Error::success();
   std::unique_ptr<IncrementalExecutor> Executor;
   if (EPC) {
-    Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI, std::move(EPC));
+    Executor =
+        std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI, std::move(EPC));
   } else {
     Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI);
   }
@@ -387,7 +390,7 @@ llvm::Error Interpreter::CreateExecutor() {
   return Err;
 }
 
-llvm::Error Interpreter::EndSession(){
+llvm::Error Interpreter::EndSession() {
   if (IncrExecutor)
     if (auto Err = IncrExecutor->removeResourceTrackers())
       return Err;
@@ -395,7 +398,7 @@ llvm::Error Interpreter::EndSession(){
   auto EE = getExecutionEngine();
   if (!EE)
     return EE.takeError();
-  
+
   isOpen = false;
   return EE->getExecutionSession().endSession();
 }

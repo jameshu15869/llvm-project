@@ -251,6 +251,35 @@ void elf::addReservedSymbols() {
   ElfSym::edata2 = add("_edata", -1);
 }
 
+// If all references to a DSO happen to be weak, the DSO is not added to
+// DT_NEEDED. If that happens, replace ShardSymbol with Undefined to avoid
+// dangling references to an unneeded DSO. Use a weak binding to avoid
+// --no-allow-shlib-undefined diagnostics. Similarly, demote lazy symbols.
+static void demoteSymbols() {
+  llvm::TimeTraceScope timeScope("Demote symbols");
+  for (Symbol *sym : symtab.getSymbols()) {
+    auto *s = dyn_cast<SharedSymbol>(sym);
+    if (!(s && !cast<SharedFile>(s->file)->isNeeded) && !sym->isLazy())
+      continue;
+    uint8_t binding = sym->isLazy() ? sym->binding : uint8_t(STB_WEAK);
+    Undefined(nullptr, sym->getName(), binding, sym->stOther, sym->type)
+        .overwrite(*sym);
+    sym->versionId = VER_NDX_GLOBAL;
+  }
+}
+
+// Fully static executables don't support MTE globals at this point in time, as
+// we currently rely on:
+//   - A dynamic loader to process relocations, and
+//   - Dynamic entries.
+// This restriction could be removed in future by re-using some of the ideas
+// that ifuncs use in fully static executables.
+bool elf::canHaveMemtagGlobals() {
+  return config->emachine == EM_AARCH64 &&
+         config->androidMemtagMode != ELF::NT_MEMTAG_LEVEL_NONE &&
+         (config->relocatable || config->shared || needsInterpSection());
+}
+
 static OutputSection *findSection(StringRef name, unsigned partition = 1) {
   for (SectionCommand *cmd : script->sectionCommands)
     if (auto *osd = dyn_cast<OutputDesc>(cmd))
@@ -345,11 +374,7 @@ template <class ELFT> void elf::createSyntheticSections() {
         std::make_unique<SymbolTableSection<ELFT>>(*part.dynStrTab);
     part.dynamic = std::make_unique<DynamicSection<ELFT>>();
 
-    if (config->emachine == EM_AARCH64 &&
-        config->androidMemtagMode != ELF::NT_MEMTAG_LEVEL_NONE) {
-      if (!config->relocatable && !config->shared && !needsInterpSection())
-        error("--android-memtag-mode is incompatible with fully-static "
-              "executables (-static)");
+    if (canHaveMemtagGlobals()) {
       part.memtagAndroidNote = std::make_unique<MemtagAndroidNote>();
       add(*part.memtagAndroidNote);
       part.memtagDescriptors = std::make_unique<MemtagDescriptors>();
@@ -1672,6 +1697,7 @@ template <class ELFT> void Writer<ELFT>::finalizeAddressDependentContent() {
       changed |= a32p.createFixes();
     }
 
+    finalizeSynthetic(in.got.get());
     if (in.mipsGot)
       in.mipsGot->updateAllocSize();
 
@@ -1926,12 +1952,13 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
       for (Partition &part : partitions)
         finalizeSynthetic(part.ehFrame.get());
     }
+  }
 
-    if (config->hasDynSymTab) {
-      parallelForEach(symtab.getSymbols(), [](Symbol *sym) {
-        sym->isPreemptible = computeIsPreemptible(*sym);
-      });
-    }
+  demoteSymbols();
+  if (config->hasDynSymTab) {
+    parallelForEach(symtab.getSymbols(), [](Symbol *sym) {
+      sym->isPreemptible = computeIsPreemptible(*sym);
+    });
   }
 
   // Change values of linker-script-defined symbols from placeholders (assigned
@@ -2187,7 +2214,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
   for (OutputSection *sec : outputSections)
     sec->finalize();
 
-  script->checkMemoryRegions();
+  script->checkFinalScriptConditions();
 
   if (config->emachine == EM_ARM && !config->isLE && config->armBe8) {
     addArmInputSectionMappingSymbols();

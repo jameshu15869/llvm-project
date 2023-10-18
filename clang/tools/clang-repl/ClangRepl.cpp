@@ -31,6 +31,14 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+// Disable LSan for this test.
+// FIXME: Re-enable once we can assume GCC 13.2 or higher.
+// https://llvm.org/github.com/llvm/llvm-project/issues/67586.
+#if LLVM_ADDRESS_SANITIZER_BUILD || LLVM_HWADDRESS_SANITIZER_BUILD
+#include <sanitizer/lsan_interface.h>
+LLVM_ATTRIBUTE_USED int __lsan_is_turned_off() { return 1; }
+#endif
+
 static llvm::cl::opt<bool> CudaEnabled("cuda", llvm::cl::Hidden);
 static llvm::cl::opt<std::string> CudaPath("cuda-path", llvm::cl::Hidden);
 static llvm::cl::opt<std::string> OffloadArch("offload-arch", llvm::cl::Hidden);
@@ -346,7 +354,7 @@ int main(int argc, const char **argv) {
   llvm::InitializeAllAsmPrinters();
 
   if (OptHostSupportsJit) {
-    auto J = llvm::orc::LLJITBuilder().setEnableDebuggerSupport(true).create();
+    auto J = llvm::orc::LLJITBuilder().create();
     if (J)
       llvm::outs() << "true\n";
     else {

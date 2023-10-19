@@ -77,8 +77,13 @@ IncrementalExecutor::IncrementalExecutor(
   JTMB.addFeatures(TI.getTargetOpts().Features);
   LLJITBuilder Builder;
   Builder.setJITTargetMachineBuilder(JTMB);
-  // Enable debugging of JIT'd code (only works on JITLink for ELF and MachO).
-  Builder.setEnableDebuggerSupport(true);
+  Builder.setPrePlatformSetup(
+      [](LLJIT &J) {
+        // Try to enable debugging of JIT'd code (only works with JITLink for
+        // ELF and MachO).
+        consumeError(enableDebuggerSupport(J));
+        return llvm::Error::success();
+      });
 
   Builder.setExecutorProcessControl(std::move(EPC));
 

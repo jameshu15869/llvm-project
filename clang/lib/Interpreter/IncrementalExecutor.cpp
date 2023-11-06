@@ -56,7 +56,9 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
         consumeError(enableDebuggerSupport(J));
         return llvm::Error::success();
       });
-
+  Builder.setPlatformSetUp(
+    llvm::orc::ExecutorNativePlatform("/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/x86_64-unknown-linux-gnu/liborc_rt.a")
+  );
   if (auto JitOrErr = Builder.create())
     Jit = std::move(*JitOrErr);
   else {
@@ -84,11 +86,22 @@ IncrementalExecutor::IncrementalExecutor(
         consumeError(enableDebuggerSupport(J));
         return llvm::Error::success();
       });
-
   Builder.setExecutorProcessControl(std::move(EPC));
+  Builder.setPlatformSetUp(
+    llvm::orc::ExecutorNativePlatform("/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/x86_64-unknown-linux-gnu/liborc_rt.a")
+  );
 
   if (auto JitOrErr = Builder.create()) {
     Jit = std::move(*JitOrErr);
+    // if (auto DylibSearchGeneratorOrErr =
+    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
+    //             Jit->getExecutionSession())) {
+    //   Jit->getPlatformJITDylib()->addGenerator(
+    //       std::move(*DylibSearchGeneratorOrErr));
+    // } else {
+    //   Err = DylibSearchGeneratorOrErr.takeError();
+    // }
+    
     if (auto DylibSearchGeneratorOrErr =
             llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
                 Jit->getExecutionSession())) {
@@ -97,6 +110,15 @@ IncrementalExecutor::IncrementalExecutor(
     } else {
       Err = DylibSearchGeneratorOrErr.takeError();
     }
+
+    // if (auto DylibSearchGeneratorOrErr =
+    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
+    //             Jit->getExecutionSession())) {
+    //   Jit->getProcessSymbolsJITDylib()->addGenerator(
+    //       std::move(*DylibSearchGeneratorOrErr));
+    // } else {
+    //   Err = DylibSearchGeneratorOrErr.takeError();
+    // }
   } else {
     Err = JitOrErr.takeError();
     return;

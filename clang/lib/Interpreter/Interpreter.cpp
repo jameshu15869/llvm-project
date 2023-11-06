@@ -36,6 +36,7 @@
 #include "clang/Lex/PreprocessorOptions.h"
 #include "clang/Sema/Lookup.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
+#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/Errc.h"
@@ -391,6 +392,13 @@ llvm::Error Interpreter::CreateExecutor() {
 }
 
 llvm::Error Interpreter::EndSession() {
+  if (IncrExecutor && isOpen) {
+    if (llvm::Error Err = IncrExecutor->cleanUp())
+      llvm::report_fatal_error(
+          llvm::Twine("Failed to clean up IncrementalExecutor: ") +
+          toString(std::move(Err)));
+  }
+  
   if (IncrExecutor)
     if (auto Err = IncrExecutor->removeResourceTrackers())
       return Err;
@@ -500,6 +508,13 @@ llvm::Error Interpreter::LoadDynamicLibrary(const char *name) {
     EE->getMainJITDylib().addGenerator(std::move(*DLSG));
   else
     return DLSG.takeError();
+  
+
+  // if (auto DLSG = llvm::orc::EPCDynamicLibrarySearchGenerator::Load(
+  //         EE->getExecutionSession(), name))
+  //   EE->getMainJITDylib().addGenerator(std::move(*DLSG));
+  // else
+  //   return DLSG.takeError();
 
   return llvm::Error::success();
 }

@@ -59,6 +59,23 @@ template <TestCond C, typename T> FPMatcher<T, C> getMatcher(T expectedValue) {
   return FPMatcher<T, C>(expectedValue);
 }
 
+template <typename T> struct FPTest : public Test {
+  using FPBits = LIBC_NAMESPACE::fputil::FPBits<T>;
+  using UIntType = typename FPBits::UIntType;
+  static constexpr T zero = T(FPBits::zero());
+  static constexpr T neg_zero = T(FPBits::neg_zero());
+  static constexpr T aNaN = T(FPBits::build_quiet_nan(1));
+  static constexpr T inf = T(FPBits::inf());
+  static constexpr T neg_inf = T(FPBits::neg_inf());
+  static constexpr int N_ROUNDING_MODES = 4;
+  static constexpr fputil::testing::RoundingMode ROUNDING_MODES[4] = {
+      fputil::testing::RoundingMode::Nearest,
+      fputil::testing::RoundingMode::Upward,
+      fputil::testing::RoundingMode::Downward,
+      fputil::testing::RoundingMode::TowardZero,
+  };
+};
+
 } // namespace testing
 } // namespace LIBC_NAMESPACE
 

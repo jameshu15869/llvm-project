@@ -245,6 +245,15 @@ Interpreter::~Interpreter() {
           llvm::Twine("Failed to clean up IncrementalExecutor: ") +
           toString(std::move(Err)));
   }
+
+  if (EPC) {
+    if (auto Err = EPC->disconnect()) {
+      llvm::report_fatal_error(
+          llvm::Twine("Failed to clean up EPC (IncrementalExecutor has not yet "
+                      "been created): ") +
+          toString(std::move(Err)));
+    }
+  }
 }
 
 // These better to put in a runtime header but we can't. This is because we

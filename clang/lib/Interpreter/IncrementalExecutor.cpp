@@ -17,8 +17,8 @@
 #include "clang/Interpreter/PartialTranslationUnit.h"
 #include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
-#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h"
+#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/ExecutorProcessControl.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
@@ -49,16 +49,15 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
   JTMB.addFeatures(TI.getTargetOpts().Features);
   LLJITBuilder Builder;
   Builder.setJITTargetMachineBuilder(JTMB);
-  Builder.setPrePlatformSetup(
-      [](LLJIT &J) {
-        // Try to enable debugging of JIT'd code (only works with JITLink for
-        // ELF and MachO).
-        consumeError(enableDebuggerSupport(J));
-        return llvm::Error::success();
-      });
-  Builder.setPlatformSetUp(
-    llvm::orc::ExecutorNativePlatform("/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/x86_64-unknown-linux-gnu/liborc_rt.a")
-  );
+  Builder.setPrePlatformSetup([](LLJIT &J) {
+    // Try to enable debugging of JIT'd code (only works with JITLink for
+    // ELF and MachO).
+    consumeError(enableDebuggerSupport(J));
+    return llvm::Error::success();
+  });
+  // Builder.setPlatformSetUp(llvm::orc::ExecutorNativePlatform(
+  //     "/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/"
+  //     "x86_64-unknown-linux-gnu/liborc_rt.a"));
   if (auto JitOrErr = Builder.create())
     Jit = std::move(*JitOrErr);
   else {
@@ -79,17 +78,16 @@ IncrementalExecutor::IncrementalExecutor(
   JTMB.addFeatures(TI.getTargetOpts().Features);
   LLJITBuilder Builder;
   Builder.setJITTargetMachineBuilder(JTMB);
-  Builder.setPrePlatformSetup(
-      [](LLJIT &J) {
-        // Try to enable debugging of JIT'd code (only works with JITLink for
-        // ELF and MachO).
-        consumeError(enableDebuggerSupport(J));
-        return llvm::Error::success();
-      });
+  Builder.setPrePlatformSetup([](LLJIT &J) {
+    // Try to enable debugging of JIT'd code (only works with JITLink for
+    // ELF and MachO).
+    consumeError(enableDebuggerSupport(J));
+    return llvm::Error::success();
+  });
   Builder.setExecutorProcessControl(std::move(EPC));
-  Builder.setPlatformSetUp(
-    llvm::orc::ExecutorNativePlatform("/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/x86_64-unknown-linux-gnu/liborc_rt.a")
-  );
+  Builder.setPlatformSetUp(llvm::orc::ExecutorNativePlatform(
+      "/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/"
+      "x86_64-unknown-linux-gnu/liborc_rt.a"));
 
   if (auto JitOrErr = Builder.create()) {
     Jit = std::move(*JitOrErr);
@@ -101,15 +99,15 @@ IncrementalExecutor::IncrementalExecutor(
     // } else {
     //   Err = DylibSearchGeneratorOrErr.takeError();
     // }
-    
-    if (auto DylibSearchGeneratorOrErr =
-            llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
-                Jit->getExecutionSession())) {
-      Jit->getMainJITDylib().addGenerator(
-          std::move(*DylibSearchGeneratorOrErr));
-    } else {
-      Err = DylibSearchGeneratorOrErr.takeError();
-    }
+
+    // if (auto DylibSearchGeneratorOrErr =
+    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
+    //             Jit->getExecutionSession())) {
+    //   Jit->getMainJITDylib().addGenerator(
+    //       std::move(*DylibSearchGeneratorOrErr));
+    // } else {
+    //   Err = DylibSearchGeneratorOrErr.takeError();
+    // }
 
     // if (auto DylibSearchGeneratorOrErr =
     //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(

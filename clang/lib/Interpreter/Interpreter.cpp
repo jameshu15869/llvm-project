@@ -394,21 +394,27 @@ llvm::Error Interpreter::CreateExecutor() {
 llvm::Error Interpreter::EndSession() {
   if (IncrExecutor && isOpen) {
     if (llvm::Error Err = IncrExecutor->cleanUp())
-      llvm::report_fatal_error(
-          llvm::Twine("Failed to clean up IncrementalExecutor: ") +
-          toString(std::move(Err)));
-  }
-  
-  if (IncrExecutor)
+      // llvm::report_fatal_error(
+      //     llvm::Twine("Failed to clean up IncrementalExecutor: ") +
+      //     toString(std::move(Err)));
+      return Err;
     if (auto Err = IncrExecutor->removeResourceTrackers())
       return Err;
+    auto EE = getExecutionEngine();
+    if (!EE)
+      return EE.takeError();
 
-  auto EE = getExecutionEngine();
-  if (!EE)
-    return EE.takeError();
+    isOpen = false;
+    return EE->getExecutionSession().endSession();
+  }
 
-  isOpen = false;
-  return EE->getExecutionSession().endSession();
+  // if (IncrExecutor)
+  //   if (auto Err = IncrExecutor->removeResourceTrackers())
+  //     return Err;
+  if (EPC) {
+    return EPC->disconnect();
+  }
+  return llvm::Error::success();
 }
 
 llvm::Error Interpreter::Execute(PartialTranslationUnit &T) {
@@ -508,7 +514,6 @@ llvm::Error Interpreter::LoadDynamicLibrary(const char *name) {
     EE->getMainJITDylib().addGenerator(std::move(*DLSG));
   else
     return DLSG.takeError();
-  
 
   // if (auto DLSG = llvm::orc::EPCDynamicLibrarySearchGenerator::Load(
   //         EE->getExecutionSession(), name))

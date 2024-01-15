@@ -6,6 +6,7 @@
 // CHECK-DRIVER: i = 10
 
 // RUN: cat %s | clang-repl | FileCheck %s
+// RUN: cat %s | clang-repl -oop-executor | FileCheck %s
 // RUN: cat %s | clang-repl -Xcc -O2 | FileCheck %s
 extern "C" int printf(const char *, ...);
 int i = 42;

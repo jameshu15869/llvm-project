@@ -237,6 +237,7 @@ ELFNixPlatform::standardRuntimeUtilityAliases() {
           {"__orc_rt_run_program", "__orc_rt_elfnix_run_program"},
           {"__orc_rt_jit_dlerror", "__orc_rt_elfnix_jit_dlerror"},
           {"__orc_rt_jit_dlopen", "__orc_rt_elfnix_jit_dlopen"},
+          {"__orc_rt_jit_dlupdate", "__orc_rt_elfnix_jit_dlupdate"},
           {"__orc_rt_jit_dlclose", "__orc_rt_elfnix_jit_dlclose"},
           {"__orc_rt_jit_dlsym", "__orc_rt_elfnix_jit_dlsym"},
           {"__orc_rt_log_error", "__orc_rt_log_error_to_stderr"}};
@@ -428,9 +429,8 @@ void ELFNixPlatform::rt_getDeinitializers(
 void ELFNixPlatform::rt_lookupSymbol(SendSymbolAddressFn SendResult,
                                      ExecutorAddr Handle,
                                      StringRef SymbolName) {
-  LLVM_DEBUG({
-    dbgs() << "ELFNixPlatform::rt_lookupSymbol(\"" << Handle << "\")\n";
-  });
+  LLVM_DEBUG(
+      { dbgs() << "ELFNixPlatform::rt_lookupSymbol(\"" << Handle << "\")\n"; });
 
   JITDylib *JD = nullptr;
 
@@ -546,8 +546,30 @@ Error ELFNixPlatform::registerInitInfo(
           JD.withLinkOrderDo([](const JITDylibSearchOrder &SO) { return SO; });
       if (auto Err = ES.lookup(SearchOrder, DSOHandleSymbol).takeError())
         return Err;
+      auto SymOrErr = ES.lookup(SearchOrder, DSOHandleSymbol);
+      if (auto Err = SymOrErr.takeError()) {
+        return Err;
+      }
 
       Lock.lock();
+      InitSeqs.insert(std::make_pair(
+          &JD,
+          ELFNixJITDylibInitializers(JD.getName(), (*SymOrErr).getAddress())));
+      // assert(NewlyAddedInitSymbols.find(&JD) != NewlyAddedInitSymbols.end()
+      // &&
+      //        "Missing new inits");
+      // assert(NewlyAddedInitSymbols.find(&JD)->getSecond().size() == 1 &&
+      //        "Not exactly 1 new initializer");
+      // auto InitializerName =
+      //     (*NewlyAddedInitSymbols.find(&JD)->getSecond().begin()).first;
+      // auto SymOrErr = ES.lookup(SearchOrder, InitializerName);
+      // if (auto Err = SymOrErr.takeError()) {
+      //   LLVM_DEBUG(dbgs() << "ERROR: " << toString(std::move(Err)) << "\n");
+      //   assert(false);
+      // }
+      // auto Address = (*SymOrErr).getAddress();
+      // InitSeqs.insert(std::make_pair(
+      //     &JD, ELFNixJITDylibInitializers(JD.getName(), Address)));
       I = InitSeqs.find(&JD);
       assert(I != InitSeqs.end() &&
              "Entry missing after header symbol lookup?");

@@ -420,7 +420,7 @@ if (NOT MSVC)
 
   # Build with optimization, unless we're in debug mode.
   if(COMPILER_RT_DEBUG)
-    list(APPEND SANITIZER_COMMON_CFLAGS -O1)
+    list(APPEND SANITIZER_COMMON_CFLAGS -O0)
   else()
     list(APPEND SANITIZER_COMMON_CFLAGS -O3)
   endif()

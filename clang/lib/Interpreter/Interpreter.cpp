@@ -516,19 +516,17 @@ llvm::Error Interpreter::LoadDynamicLibrary(const char *name) {
   if (!EE)
     return EE.takeError();
 
-  auto &DL = EE->getDataLayout();
+  // auto &DL = EE->getDataLayout();
 
-  if (auto DLSG = llvm::orc::DynamicLibrarySearchGenerator::Load(
-          name, DL.getGlobalPrefix()))
-    EE->getMainJITDylib().addGenerator(std::move(*DLSG));
-  else
-    return DLSG.takeError();
-
-  // if (auto DLSG = llvm::orc::EPCDynamicLibrarySearchGenerator::Load(
-  //         EE->getExecutionSession(), name))
+  // if (auto DLSG = llvm::orc::DynamicLibrarySearchGenerator::Load(
+  //         name, DL.getGlobalPrefix()))
   //   EE->getMainJITDylib().addGenerator(std::move(*DLSG));
   // else
   //   return DLSG.takeError();
+
+  if (auto DLSG = llvm::orc::EPCDynamicLibrarySearchGenerator::Load(
+          EE->getExecutionSession(), name))
+    EE->getMainJITDylib().addGenerator(std::move(*DLSG));
 
   return llvm::Error::success();
 }

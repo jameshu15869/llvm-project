@@ -85,6 +85,8 @@ class Interpreter {
   // An optional parameter for an out-of-process executor
   std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC;
 
+  llvm::StringRef OrcRuntimePath;
+
   Interpreter(std::unique_ptr<CompilerInstance> CI, llvm::Error &Err);
 
   llvm::Error CreateExecutor();
@@ -105,8 +107,7 @@ public:
   static llvm::Expected<std::unique_ptr<Interpreter>>
   createWithOutOfProcessExecutor(
       std::unique_ptr<CompilerInstance> CI,
-      std::unique_ptr<llvm::orc::ExecutorProcessControl> EI);
-  llvm::Error EndSession();
+      std::unique_ptr<llvm::orc::ExecutorProcessControl> EI, llvm::StringRef OrcRuntimePath);
   const ASTContext &getASTContext() const;
   ASTContext &getASTContext();
   const CompilerInstance *getCompilerInstance() const;
@@ -149,10 +150,6 @@ private:
   size_t getEffectivePTUSize() const;
 
   bool FindRuntimeInterface();
-
-  // Ensure that we do not try to clean up the Interpreter in ~Interpreter if
-  // ExecutionSession::endSession() was already called.
-  bool isOpen = true;
 
   llvm::DenseMap<CXXRecordDecl *, llvm::orc::ExecutorAddr> Dtors;
 

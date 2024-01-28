@@ -544,32 +544,17 @@ Error ELFNixPlatform::registerInitInfo(
 
       auto SearchOrder =
           JD.withLinkOrderDo([](const JITDylibSearchOrder &SO) { return SO; });
-      if (auto Err = ES.lookup(SearchOrder, DSOHandleSymbol).takeError())
-        return Err;
       auto SymOrErr = ES.lookup(SearchOrder, DSOHandleSymbol);
       if (auto Err = SymOrErr.takeError()) {
         return Err;
       }
 
       Lock.lock();
+      // We can allow reinitialization by reinserting the handles to each 
+      // JITDylib into InitSeqs.
       InitSeqs.insert(std::make_pair(
           &JD,
           ELFNixJITDylibInitializers(JD.getName(), (*SymOrErr).getAddress())));
-      // assert(NewlyAddedInitSymbols.find(&JD) != NewlyAddedInitSymbols.end()
-      // &&
-      //        "Missing new inits");
-      // assert(NewlyAddedInitSymbols.find(&JD)->getSecond().size() == 1 &&
-      //        "Not exactly 1 new initializer");
-      // auto InitializerName =
-      //     (*NewlyAddedInitSymbols.find(&JD)->getSecond().begin()).first;
-      // auto SymOrErr = ES.lookup(SearchOrder, InitializerName);
-      // if (auto Err = SymOrErr.takeError()) {
-      //   LLVM_DEBUG(dbgs() << "ERROR: " << toString(std::move(Err)) << "\n");
-      //   assert(false);
-      // }
-      // auto Address = (*SymOrErr).getAddress();
-      // InitSeqs.insert(std::make_pair(
-      //     &JD, ELFNixJITDylibInitializers(JD.getName(), Address)));
       I = InitSeqs.find(&JD);
       assert(I != InitSeqs.end() &&
              "Entry missing after header symbol lookup?");

@@ -55,9 +55,6 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
     consumeError(enableDebuggerSupport(J));
     return llvm::Error::success();
   });
-  // Builder.setPlatformSetUp(llvm::orc::ExecutorNativePlatform(
-  //     "/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/"
-  //     "x86_64-unknown-linux-gnu/liborc_rt.a"));
   if (auto JitOrErr = Builder.create())
     Jit = std::move(*JitOrErr);
   else {
@@ -69,7 +66,7 @@ IncrementalExecutor::IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC,
 IncrementalExecutor::IncrementalExecutor(
     llvm::orc::ThreadSafeContext &TSC, llvm::Error &Err,
     const clang::TargetInfo &TI,
-    std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC)
+    std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC, llvm::StringRef OrcRuntimePath)
     : TSCtx(TSC) {
   using namespace llvm::orc;
   llvm::ErrorAsOutParameter EAO(&Err);
@@ -85,38 +82,10 @@ IncrementalExecutor::IncrementalExecutor(
     return llvm::Error::success();
   });
   Builder.setExecutorProcessControl(std::move(EPC));
-  Builder.setPlatformSetUp(llvm::orc::ExecutorNativePlatform(
-      "/home/gfx/Documents/llvm-project/build/lib/clang/18/lib/"
-      "x86_64-unknown-linux-gnu/liborc_rt.a"));
+  Builder.setPlatformSetUp(llvm::orc::ExecutorNativePlatform(OrcRuntimePath.str()));
 
   if (auto JitOrErr = Builder.create()) {
     Jit = std::move(*JitOrErr);
-    // if (auto DylibSearchGeneratorOrErr =
-    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
-    //             Jit->getExecutionSession())) {
-    //   Jit->getPlatformJITDylib()->addGenerator(
-    //       std::move(*DylibSearchGeneratorOrErr));
-    // } else {
-    //   Err = DylibSearchGeneratorOrErr.takeError();
-    // }
-
-    // if (auto DylibSearchGeneratorOrErr =
-    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
-    //             Jit->getExecutionSession())) {
-    //   Jit->getMainJITDylib().addGenerator(
-    //       std::move(*DylibSearchGeneratorOrErr));
-    // } else {
-    //   Err = DylibSearchGeneratorOrErr.takeError();
-    // }
-
-    // if (auto DylibSearchGeneratorOrErr =
-    //         llvm::orc::EPCDynamicLibrarySearchGenerator::GetForTargetProcess(
-    //             Jit->getExecutionSession())) {
-    //   Jit->getProcessSymbolsJITDylib()->addGenerator(
-    //       std::move(*DylibSearchGeneratorOrErr));
-    // } else {
-    //   Err = DylibSearchGeneratorOrErr.takeError();
-    // }
   } else {
     Err = JitOrErr.takeError();
     return;
@@ -149,12 +118,6 @@ llvm::Error IncrementalExecutor::removeModule(PartialTranslationUnit &PTU) {
 llvm::Error IncrementalExecutor::cleanUp() {
   // This calls the global dtors of registered modules.
   return Jit->deinitialize(Jit->getMainJITDylib());
-}
-
-// Clear the map to remove references to the resouce trackers.
-llvm::Error IncrementalExecutor::removeResourceTrackers() {
-  ResourceTrackers.shrink_and_clear();
-  return llvm::Error::success();
 }
 
 llvm::Error IncrementalExecutor::runCtors() const {

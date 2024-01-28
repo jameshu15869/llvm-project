@@ -418,9 +418,6 @@ ELFNixPlatformRuntimeState::dlopenInitialize(std::string_view Path, int Mode) {
 Expected<void *>
 ELFNixPlatformRuntimeState::dlupdateInitialize(std::string_view Path,
                                                int Mode) {
-  // Either our JITDylib wasn't loaded, or it or one of its dependencies allows
-  // reinitialization. We need to call in to the JIT to see if there's any new
-  // work pending.
   auto InitSeq = getJITDylibInitializersByName(Path);
   if (!InitSeq)
     return InitSeq.takeError();
@@ -428,9 +425,6 @@ ELFNixPlatformRuntimeState::dlupdateInitialize(std::string_view Path,
   // Init sequences can be empty becaue we are (possibly) reinitializing
   if (InitSeq->empty())
     return getJITDylibStateByName(Path)->Header;
-  // return make_error<StringError>(
-  //     "__orc_rt_elfnix_get_initializers returned an "
-  //     "empty init sequence");
 
   // Otherwise register and run initializers for each JITDylib.
   for (auto &MOJDIs : *InitSeq)

@@ -52,15 +52,19 @@ static llvm::cl::opt<bool> OptHostSupportsJit("host-supports-jit",
 static llvm::cl::list<std::string> OptInputs(llvm::cl::Positional,
                                              llvm::cl::desc("[code to run]"));
 
-static llvm::cl::OptionCategory JITLinkCategory("JITLink Options");
+static llvm::cl::OptionCategory OOPCategory("Out-of-process Execution Options");
 static llvm::cl::opt<std::string> OutOfProcessExecutor(
     "oop-executor",
     llvm::cl::desc("Launch an out-of-process executor to run code"),
-    llvm::cl::ValueOptional, llvm::cl::cat(JITLinkCategory));
+    llvm::cl::ValueOptional, llvm::cl::cat(OOPCategory));
 static llvm::cl::opt<std::string> OutOfProcessExecutorConnect(
     "oop-executor-connect",
     llvm::cl::desc("Connect to an out-of-process executor via TCP"),
-    llvm::cl::cat(JITLinkCategory));
+    llvm::cl::cat(OOPCategory));
+static llvm::cl::opt<std::string> OrcRuntimePath(
+    "orc-runtime",
+    llvm::cl::desc("Path to the ORC runtime"),
+    llvm::cl::cat(OOPCategory));
 
 static void LLVMErrorHandler(void *UserData, const char *Message,
                              bool GenCrashDiag) {
@@ -178,6 +182,16 @@ static llvm::Error sanitizeArguments(const char *ArgV0) {
     llvm::sys::path::remove_filename(OOPExecutorPath);
     llvm::sys::path::append(OOPExecutorPath, "llvm-jitlink-executor");
     OutOfProcessExecutor = OOPExecutorPath.str().str();
+  }
+
+  // Out-of-process executors must run with the ORC runtime for destructor support.
+  if (OrcRuntimePath.empty() && (OutOfProcessExecutor.getNumOccurrences() || OutOfProcessExecutorConnect.getNumOccurrences())) {
+    llvm::SmallString<256> OrcPath(llvm::sys::fs::getMainExecutable(
+        ArgV0, reinterpret_cast<void *>(&sanitizeArguments)));
+    llvm::sys::path::remove_filename(OrcPath); // Remove clang-repl filename.
+    llvm::sys::path::remove_filename(OrcPath); // Remove ./bin directory.
+    llvm::sys::path::append(OrcPath, "lib/clang/18/lib/x86_64-unknown-linux-gnu/liborc_rt.a");
+    OrcRuntimePath = OrcPath.str().str();
   }
 
   return llvm::Error::success();
@@ -416,13 +430,14 @@ int main(int argc, const char **argv) {
   } else if (OutOfProcessExecutor.getNumOccurrences()) {
     // Create an instance of llvm-jitlink-executor in a separate process.
     auto oopExecutor = ExitOnErr(launchExecutor());
+    llvm::outs() << "String: " << OrcRuntimePath << "\n";
     Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(
-        std::move(CI), std::move(oopExecutor)));
+        std::move(CI), std::move(oopExecutor), OrcRuntimePath));
   } else if (OutOfProcessExecutorConnect.getNumOccurrences()) {
     /// If -oop-executor-connect is passed then connect to the executor.
     auto REPC = ExitOnErr(connectToExecutor());
     Interp = ExitOnErr(clang::Interpreter::createWithOutOfProcessExecutor(
-        std::move(CI), std::move(REPC)));
+        std::move(CI), std::move(REPC), OrcRuntimePath));
   } else
     Interp = ExitOnErr(clang::Interpreter::create(std::move(CI)));
 
@@ -449,7 +464,7 @@ int main(int argc, const char **argv) {
 
       Input += L;
       if (Input == R"(%quit)") {
-        ExitOnErr(Interp->EndSession());
+        // ExitOnErr(Interp->EndSession());
         break;
       }
       if (Input == R"(%undo)") {

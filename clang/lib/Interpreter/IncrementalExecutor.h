@@ -48,14 +48,13 @@ public:
                       const clang::TargetInfo &TI);
   IncrementalExecutor(llvm::orc::ThreadSafeContext &TSC, llvm::Error &Err,
                       const clang::TargetInfo &TI,
-                      std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC);
+                      std::unique_ptr<llvm::orc::ExecutorProcessControl> EPC, llvm::StringRef OrcRuntimePath);
   ~IncrementalExecutor();
 
   llvm::Error addModule(PartialTranslationUnit &PTU);
   llvm::Error removeModule(PartialTranslationUnit &PTU);
   llvm::Error runCtors() const;
   llvm::Error cleanUp();
-  llvm::Error removeResourceTrackers();
   llvm::Expected<llvm::orc::ExecutorAddr>
   getSymbolAddress(llvm::StringRef Name, SymbolNameKind NameKind) const;
 

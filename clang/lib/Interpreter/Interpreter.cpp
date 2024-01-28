@@ -237,9 +237,7 @@ Interpreter::Interpreter(std::unique_ptr<CompilerInstance> CI,
 }
 
 Interpreter::~Interpreter() {
-  // If we already closed the Interpreter with EndSession(),
-  // the IncrementalExecutor has already been cleaned up.
-  if (IncrExecutor && isOpen) {
+  if (IncrExecutor) {
     if (llvm::Error Err = IncrExecutor->cleanUp())
       llvm::report_fatal_error(
           llvm::Twine("Failed to clean up IncrementalExecutor: ") +
@@ -330,12 +328,13 @@ Interpreter::createWithCUDA(std::unique_ptr<CompilerInstance> CI,
 llvm::Expected<std::unique_ptr<Interpreter>>
 Interpreter::createWithOutOfProcessExecutor(
     std::unique_ptr<CompilerInstance> CI,
-    std::unique_ptr<llvm::orc::ExecutorProcessControl> EI) {
+    std::unique_ptr<llvm::orc::ExecutorProcessControl> EI, llvm::StringRef OrcRuntimePath) {
   auto Interp = create(std::move(CI));
   if (auto E = Interp.takeError()) {
     return std::move(E);
   }
   (*Interp)->EPC = std::move(EI);
+  (*Interp)->OrcRuntimePath = OrcRuntimePath;
   return Interp;
 }
 
@@ -390,7 +389,7 @@ llvm::Error Interpreter::CreateExecutor() {
   std::unique_ptr<IncrementalExecutor> Executor;
   if (EPC) {
     Executor =
-        std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI, std::move(EPC));
+        std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI, std::move(EPC), OrcRuntimePath);
   } else {
     Executor = std::make_unique<IncrementalExecutor>(*TSCtx, Err, TI);
   }
@@ -398,32 +397,6 @@ llvm::Error Interpreter::CreateExecutor() {
     IncrExecutor = std::move(Executor);
 
   return Err;
-}
-
-llvm::Error Interpreter::EndSession() {
-  if (IncrExecutor && isOpen) {
-    if (llvm::Error Err = IncrExecutor->cleanUp())
-      // llvm::report_fatal_error(
-      //     llvm::Twine("Failed to clean up IncrementalExecutor: ") +
-      //     toString(std::move(Err)));
-      return Err;
-    if (auto Err = IncrExecutor->removeResourceTrackers())
-      return Err;
-    auto EE = getExecutionEngine();
-    if (!EE)
-      return EE.takeError();
-
-    isOpen = false;
-    return EE->getExecutionSession().endSession();
-  }
-
-  // if (IncrExecutor)
-  //   if (auto Err = IncrExecutor->removeResourceTrackers())
-  //     return Err;
-  if (EPC) {
-    return EPC->disconnect();
-  }
-  return llvm::Error::success();
 }
 
 llvm::Error Interpreter::Execute(PartialTranslationUnit &T) {
@@ -515,14 +488,6 @@ llvm::Error Interpreter::LoadDynamicLibrary(const char *name) {
   auto EE = getExecutionEngine();
   if (!EE)
     return EE.takeError();
-
-  // auto &DL = EE->getDataLayout();
-
-  // if (auto DLSG = llvm::orc::DynamicLibrarySearchGenerator::Load(
-  //         name, DL.getGlobalPrefix()))
-  //   EE->getMainJITDylib().addGenerator(std::move(*DLSG));
-  // else
-  //   return DLSG.takeError();
 
   if (auto DLSG = llvm::orc::EPCDynamicLibrarySearchGenerator::Load(
           EE->getExecutionSession(), name))

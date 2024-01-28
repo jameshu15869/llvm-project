@@ -296,7 +296,6 @@ public:
       dbgs() << "GenericLLVMIRPlatformSupport getting initializers to run\n";
     });
     if (auto Initializers = getInitializers(JD)) {
-      auto &ES = getExecutionSession();
       LLVM_DEBUG(
           { dbgs() << "GenericLLVMIRPlatformSupport running initializers\n"; });
       for (auto InitFnAddr : *Initializers) {
@@ -304,11 +303,8 @@ public:
           dbgs() << "  Running init " << formatv("{0:x16}", InitFnAddr)
                  << "...\n";
         });
-        if (auto Err = ES.getExecutorProcessControl()
-                           .runAsVoidFunction(InitFnAddr)
-                           .takeError()) {
-          return Err;
-        }
+        auto *InitFn = InitFnAddr.toPtr<void (*)()>();
+        InitFn();
       }
     } else
       return Initializers.takeError();
@@ -328,12 +324,8 @@ public:
           dbgs() << "  Running deinit " << formatv("{0:x16}", DeinitFnAddr)
                  << "...\n";
         });
-        auto &ES = getExecutionSession();
-        if (auto Err = ES.getExecutorProcessControl()
-                           .runAsVoidFunction(DeinitFnAddr)
-                           .takeError()) {
-          return Err;
-        }
+        auto *DeinitFn = DeinitFnAddr.toPtr<void (*)()>();
+        DeinitFn();
       }
     } else
       return Deinitializers.takeError();

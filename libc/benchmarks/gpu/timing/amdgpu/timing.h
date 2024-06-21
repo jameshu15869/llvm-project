@@ -25,8 +25,8 @@ namespace LIBC_NAMESPACE {
   gpu::memory_fence();
   uint64_t start = gpu::processor_clock();
   uint32_t result = 0.0;
-  asm volatile("v_or_b32 %[v_reg], 0, %[v_reg]\n" ::[v_reg] "v"(result) :);
-  asm volatile("" ::"s"(start));
+  asm("v_or_b32 %[v_reg], 0, %[v_reg]\n" ::[v_reg] "v"(result) :);
+  asm("" ::"s"(start));
   uint64_t stop = gpu::processor_clock();
   return stop - start;
 }
@@ -40,7 +40,7 @@ template <typename F, typename T>
   // not constant propagate it and remove the profiling region.
   volatile uint32_t storage = t;
   float arg = storage;
-  asm volatile("" ::"s"(arg));
+  asm("" ::"s"(arg));
 
   // The AMDGPU architecture needs to wait on pending results.
   gpu::memory_fence();
@@ -49,25 +49,25 @@ template <typename F, typename T>
 
   // This forces the compiler to load the input argument and run the clock cycle
   // counter before the profiling region.
-  asm volatile("" ::"s"(arg), "s"(start));
+  asm("" ::"s"(arg), "s"(start));
 
   // Run the function under test and return its value.
   auto result = f(arg);
 
   // This inline assembly performs a no-op which forces the result to both be
   // used and prevents us from exiting this region before it's complete.
-  asm volatile("v_or_b32 %[v_reg], 0, %[v_reg]\n" ::[v_reg] "v"(result) :);
+  asm("v_or_b32 %[v_reg], 0, %[v_reg]\n" ::[v_reg] "v"(result) :);
 
   // Obtain the current timestamp after running the calculation and force
   // ordering.
   uint64_t stop = gpu::processor_clock();
-  asm volatile("" ::"s"(stop));
+  asm("" ::"s"(stop));
   gpu::memory_fence();
 
   // Return the time elapsed.
   return stop - start;
 }
 
-} // namespace __llvm_libc
+} // namespace LIBC_NAMESPACE
 
 #endif // LLVM_LIBC_UTILS_GPU_TIMING_AMDGPU
